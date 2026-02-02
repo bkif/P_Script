@@ -1,1 +1,91 @@
-hello
+<#
+.NOTES
+===========================================================================
+ETML
+Nom du script  : SystemInfoLogger.ps1
+Auteur         : Douglas Ribero, Martin Ivliev
+Date           : janvier-février 2026
+
+.SYNOPSIS
+Script PowerShell pour logger les informations système locales ou distantes.
+
+.DESCRIPTION
+Ce script permet à l'utilisateur de choisir entre logger les informations de son propre système ou celles d'un autre ordinateur via son adresse IP.
+Les informations collectées incluent la date, le nom de l'ordinateur, l'adresse IP
+
+.EXAMPLE
+.\SystemInfoLogger.ps1
+
+.EXAMPLE
+2026-02-02 12:50 - MART/10.0.2.15 - Infos système: 10.0.26200 Build 26200 Utilisation de l'espace disque C: 31.55 GB / 119.99 GB RAM: 6.79 GB / 7.98 GB
+2026-02-02 12:50 - MART/10.0.2.15 - Programmes installés:        
+2026-02-02 12:50 - MART/10.0.2.15 - Info spécifique: Résolution écran actuelle: 1920x1080
+#>
+
+# Pas de paramètre
+
+########################################################################
+# Zone de définition des variables et fonctions
+    $date = Get-Date -Format "yyyy-MM-dd HH:mm"
+    <# Récupération du nom de l'ordinateur #>
+    $nom_pc = $env:COMPUTERNAME
+    <# Récupération de l'adresse IP IPv4 non loopback #>
+    $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.InterfaceAlias -notlike "*Loopback*"} | Select-Object -First 1).IPAddress
+    <# variable partie info reunie #>
+    $info_de_base = Write-Output "$date - $nom_pc/$ip"
+    <# variable partie date #>
+    $version = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
+    <# variable partie espace utilisé disque C #>
+    $espace_utilisé_gb = [math]::Round(((Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='C:'").Size - (Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='C:'").FreeSpace) / 1GB, 2)
+    <# variable partie espace totale discue C #>
+    $espace_totale_gb = [math]::Round((Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='C:'").Size / 1GB, 2)
+    <# variable partie espace ram utilisé #>
+    $espace_ram_utilisé_gb = [math]::Round(((Get-CimInstance -ClassName Win32_OperatingSystem).TotalVisibleMemorySize - (Get-CimInstance -ClassName Win32_OperatingSystem).FreePhysicalMemory) / 1MB, 2)
+    <# variable partie espace ram totale #>
+    $espace_ram_totale_gb = [math]::Round((Get-CimInstance -ClassName Win32_OperatingSystem).TotalVisibleMemorySize / 1MB, 2)
+    <# variable partie build #>
+    $build = (Get-CimInstance -ClassName Win32_OperatingSystem).BuildNumber
+    <# variable partie build complet #>
+    $version_exacte_build = (Get-CimInstance -ClassName Win32_OperatingSystem).Version
+    <# variable partie info specifique #>
+    $resoultion_ecran_actuel = (Get-CimInstance -ClassName Win32_VideoController).CurrentHorizontalResolution.ToString() + "x" + (Get-CimInstance -ClassName Win32_VideoController).CurrentVerticalResolution.ToString()
+    
+########################################################################
+write-output "Veuillez choisir si vous voulez logger les infos de votre système ou d'un autre IP"
+$choice = Read-Host "Entrez 1 pour logger les infos de votre système, 2 pour logger les infos d'un autre IP"
+if ($choice -eq 1) {
+
+    <# partie infos système #>
+
+    write-output "$info_de_base - Infos système: $version_exacte_build Build $build Utilisation de l'espace disque C: $espace_utilisé_gb GB / $espace_totale_gb GB - RAM: $espace_ram_utilisé_gb GB / $espace_ram_totale_gb GB"
+    
+    <# parti programme #>
+    
+    $programmesInstalles = Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, InstallDate
+    write-output "$info_de_base - Programmes installés: $programmesInstalles"
+    
+    <#parti info specifique#>
+    
+    write-output "$info_de_base - Info spécifique: Résolution écran actuelle: $resoultion_ecran_actuel"
+}
+
+<#log par ip#>
+ else {
+    <# connexion a un ordi via ip #>
+    Enter-PSSession -ComputerName (Read-Host "Entrez l'IP ou le nom de l'ordinateur distant")
+    <# partie infos système #>
+
+    write-output "$info_de_base - Infos système: $version_exacte_build Build $build Utilisation de l'espace disque C: $espace_utilisé_gb GB / $espace_totale_gb GB - RAM: $espace_ram_utilisé_gb GB / $espace_ram_totale_gb GB"
+    
+    <# parti programme #>
+    
+    $programmesInstalles = Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, InstallDate
+    write-output "$info_de_base - Programmes installés: $programmesInstalles"
+    
+    <#parti info specifique#>
+    
+    write-output "$info_de_base - Info spécifique: Résolution écran actuelle: $resoultion_ecran_actuel"
+
+    <# deconnexion de l ordi distant#>
+    Exit-PSSession
+}
